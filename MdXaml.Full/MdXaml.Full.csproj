@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <TargetFrameworks>$(PackageTargetFrameworks)</TargetFrameworks>
+    <UseWPF>true</UseWPF>
+    <PackageId>MdXaml.Full</PackageId>
+    <Version>$(PackageVersion)</Version>
+    <Authors>Bevan Arps(original); whistyun</Authors>
+    <Company />
+    <Description>Markdown XAML processor</Description>
+    <Copyright>Copyright (c) 2010 Bevan Arps, 2023 whistyun</Copyright>
+    <PackageProjectUrl>https://github.com/whistyun/MdXaml</PackageProjectUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>MdXaml.Full.md</PackageReadmeFile>
+    <PackageTags>Markdown WPF Xaml FlowDocument</PackageTags>
+    <Configurations>Debug;Release</Configurations>
+    <LangVersion>9</LangVersion>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <PropertyGroup>
+    <SignAssembly>true</SignAssembly>
+    <AssemblyOriginatorKeyFile>..\key.snk</AssemblyOriginatorKeyFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\pack_readme\MdXaml.Full.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MdXaml.AnimatedGif\MdXaml.AnimatedGif.csproj" />
+    <ProjectReference Include="..\MdXaml.Html\MdXaml.Html.csproj" />
+    <ProjectReference Include="..\MdXaml.Plugins\MdXaml.Plugins.csproj" />
+    <ProjectReference Include="..\MdXaml.Svg\MdXaml.Svg.csproj" />
+    <ProjectReference Include="..\MdXaml\MdXaml.csproj" />
+  </ItemGroup>
+
+</Project>

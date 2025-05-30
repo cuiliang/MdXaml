@@ -16,9 +16,14 @@ using System.Windows.Media;
 
 using MdXaml.LinkActions;
 using MdStyle = MdXaml.MarkdownStyle;
+using System.ComponentModel;
+using System.Windows.Media.Media3D;
+using System.Windows.Threading;
+using System.Threading.Tasks;
 
 namespace MdXaml
 {
+    // Markdownを表示するためのControl
     [ContentProperty(nameof(HereMarkdown))]
     public class MarkdownScrollViewer : FlowDocumentScrollViewer, IUriContext
     {
@@ -28,6 +33,14 @@ namespace MdXaml
                  typeof(Uri),
                  typeof(MarkdownScrollViewer),
                  new PropertyMetadata(null, UpdateSource));
+
+        public static readonly DependencyProperty FragmentProperty =
+             DependencyProperty.Register(
+                 nameof(Fragment),
+                 typeof(string),
+                 typeof(MarkdownScrollViewer),
+                 new PropertyMetadata(null, UpdateFragment));
+
 
         public static readonly DependencyProperty MarkdownProperty =
             DependencyProperty.Register(
@@ -46,10 +59,10 @@ namespace MdXaml
 
         public static readonly DependencyProperty MarkdownStyleNameProperty =
             DependencyProperty.Register(
-            nameof(MarkdownStyleName),
-            typeof(string),
-            typeof(MarkdownScrollViewer),
-            new PropertyMetadata(nameof(MdStyle.Standard), UpdateStyleName));
+                nameof(MarkdownStyleName),
+                typeof(string),
+                typeof(MarkdownScrollViewer),
+                new PropertyMetadata(nameof(MdStyle.Standard), UpdateStyleName));
 
         public static readonly DependencyProperty AssetPathRootProperty =
             DependencyProperty.Register(
@@ -58,12 +71,39 @@ namespace MdXaml
                 typeof(MarkdownScrollViewer),
                 new PropertyMetadata(null, UpdateAssetPathRoot));
 
+        public static readonly DependencyProperty DisabledLazyLoadProperty =
+            DependencyProperty.Register(
+                nameof(DisabledLazyLoad),
+                typeof(bool),
+                typeof(MarkdownScrollViewer),
+                new PropertyMetadata(false, UpdateDisabledLazyLoad));
+
 
         private static void UpdateSource(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
             if (d is MarkdownScrollViewer owner && e.NewValue is Uri source)
             {
-                owner.Open(source, false);
+                if (owner._source != source)
+                {
+                    owner._source = source;
+                    owner.Open(source, false);
+                }
+                else if (owner.Fragment != source.Fragment)
+                {
+                    owner.SetCurrentValue(FragmentProperty, source.Fragment);
+                }
+            }
+        }
+
+        private static void UpdateFragment(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        {
+            if (d is MarkdownScrollViewer owner && e.NewValue is string fragment)
+            {
+                if (owner._fragment != fragment)
+                {
+                    owner._fragment = fragment;
+                    owner.ScrollTo(fragment, false);
+                }
             }
         }
 
@@ -122,13 +162,28 @@ namespace MdXaml
             if (d is MarkdownScrollViewer owner)
             {
                 var newPath = (string)e.NewValue;
-                var shouldUpdateMd = newPath != owner.Engine.AssetPathRoot;
-
-                owner.Engine.AssetPathRoot = (string)e.NewValue;
-
-                if (shouldUpdateMd) UpdateMarkdown(d, e);
+                if (newPath != owner.Engine.AssetPathRoot)
+                {
+                    owner.Engine.AssetPathRoot = newPath;
+                    UpdateMarkdown(d, e);
+                }
             }
         }
+
+        private static void UpdateDisabledLazyLoad(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        {
+            if(d is MarkdownScrollViewer owner)
+            {
+                var disabledLazyLoad = (bool)e.NewValue;
+                if (disabledLazyLoad != owner.Engine.DisabledLazyLoad)
+                {
+                  owner.Engine.DisabledLazyLoad = (bool)e.NewValue;
+                }
+            }
+        }
+
+        private string _fragment;
+        private Uri _source;
 
         private Markdown _engine;
         public Markdown Engine
@@ -170,7 +225,7 @@ namespace MdXaml
         }
 
         private MdXamlPlugins? _plugins;
-        public MdXamlPlugins? Plugins
+        public virtual MdXamlPlugins? Plugins
         {
             set
             {
@@ -269,10 +324,22 @@ namespace MdXaml
             set { SetValue(MarkdownStyleNameProperty, value); }
         }
 
+        public bool DisabledLazyLoad
+        {
+          get { return (bool)GetValue(DisabledLazyLoadProperty); }
+          set { SetValue(DisabledLazyLoadProperty, value); }
+        }
+
         public Uri? Source
         {
             get { return (Uri)GetValue(SourceProperty); }
             set { SetValue(SourceProperty, value); }
+        }
+
+        public string Fragment
+        {
+            get { return (string)GetValue(FragmentProperty); }
+            set { SetValue(FragmentProperty, value); }
         }
 
         private ClickAction _clickAction;
@@ -295,6 +362,17 @@ namespace MdXaml
             {
                 _syntax = value;
                 UpdateMarkdown(this, default);
+            }
+        }
+
+        private HyperLinkClickCallback _onHyperLinkClicked;
+        public HyperLinkClickCallback OnHyperLinkClicked
+        {
+            get => _onHyperLinkClicked;
+            set
+            {
+                _onHyperLinkClicked = value;
+                Engine.OnHyperLinkClicked = value;
             }
         }
 
@@ -331,6 +409,28 @@ namespace MdXaml
             menu.Items.Add(ApplicationCommands.SelectAll);
 
             ContextMenu = menu;
+
+
+            // Do not use DependencyPropertyDescriptor. This may cause memory leaks if used with low understanding.
+            // 
+            // DependencyPropertyDescriptor
+            //     .FromProperty(FlowDocumentScrollViewer.DocumentProperty, typeof(FlowDocumentScrollViewer))
+            //     .AddValueChanged(this, OnDocumentChanged);
+        }
+
+        protected override void OnPropertyChanged(DependencyPropertyChangedEventArgs e)
+        {
+            base.OnPropertyChanged(e);
+
+            if (e.Property == FlowDocumentScrollViewer.DocumentProperty) 
+                OnDocumentChanged();
+        }
+
+
+        private void OnDocumentChanged()
+        {
+            if (Document is not null)
+                ScrollTo(Fragment, false);
         }
 
         private void UpdateClickAction()
@@ -343,11 +443,11 @@ namespace MdXaml
                     break;
 
                 case ClickAction.DisplayWithRelativePath:
-                    command = new DiaplayCommand(this, true, false);
+                    command = new DisplayCommand(this, true, false);
                     break;
 
                 case ClickAction.DisplayAll:
-                    command = new DiaplayCommand(this, false, false);
+                    command = new DisplayCommand(this, false, false);
                     break;
 
                 case ClickAction.SafetyOpenBrowser:
@@ -355,14 +455,79 @@ namespace MdXaml
                     break;
 
                 case ClickAction.SafetyDisplayWithRelativePath:
-                    command = new DiaplayCommand(this, true, true);
+                    command = new DisplayCommand(this, true, true);
                     break;
+
+                case ClickAction.HighlightOnly:
+                    Engine.HyperlinkCommand = new HighlightOnlyCommand();
+                    Engine.OnHyperLinkClicked = _onHyperLinkClicked;
+                    return;
 
                 default:
                     return;
             }
 
             Engine.HyperlinkCommand = new FlowDocumentJumpAnchorIfNecessary(this, command);
+            Engine.OnHyperLinkClicked = _onHyperLinkClicked;
+        }
+
+        internal void ScrollTo(string fragment, bool updateSourceProperty)
+        {
+            if (updateSourceProperty)
+            {
+                _fragment = fragment;
+                SetCurrentValue(FragmentProperty, fragment);
+            }
+
+
+            if (String.IsNullOrEmpty(fragment))
+                return;
+
+            if (Document is null)
+            {
+                Debug.Print($"MarkdownScrollViewer is uninitialized.");
+                return;
+            }
+
+            var identifier = fragment.StartsWith("#") ?
+                                    fragment.Substring(1) :
+                                    fragment;
+
+            var anchor = DocumentAnchor.FindAnchor(Document, identifier);
+            if (anchor is null)
+            {
+                Debug.Print($"Not found linkanchor: {identifier}");
+                return;
+            }
+
+            if (anchor.IsLoaded)
+            {
+                /*
+                 * dirty hack
+                 * 
+                 * I have no idea to detect a text element position in ScrollViewer.
+                 * BringIntoView has no effect if text element is placed in Viewport,
+                 * so scroll to the top once.
+                 */
+                var scroll = GetScrollViewer();
+                scroll?.ScrollToTop();
+                Dispatcher.Invoke(() => anchor.BringIntoView(), DispatcherPriority.Render);
+            }
+            else
+                anchor.Loaded += (s, e) =>
+                {
+                    /*
+                     * dirty hack
+                     * 
+                     * BringIntoView fails to scroll at correct position when Loaded only.
+                     */
+                    Dispatcher.Invoke(async () =>
+                    {
+                        await Task.Delay(100);
+                        Dispatcher.Invoke(anchor.BringIntoView, DispatcherPriority.Background);
+                    }, DispatcherPriority.Background);
+                };
+
         }
 
         internal void Open(Uri source, bool updateSourceProperty)
@@ -401,13 +566,20 @@ namespace MdXaml
 
                     var assetPathRoot = path.Scheme == "file" ? Path.GetDirectoryName(path.LocalPath) : path.AbsoluteUri;
 
+                    // suppress property changed
                     Engine.AssetPathRoot = assetPathRoot;
-
                     SetCurrentValue(AssetPathRootProperty, assetPathRoot);
-                    SetCurrentValue(MarkdownProperty, newMdTxt);
+
+                    _fragment = path.Fragment;
+                    SetCurrentValue(FragmentProperty, path.Fragment);
 
                     if (updateSourceProperty)
+                    {
+                        _source = path;
                         SetCurrentValue(SourceProperty, path);
+                    }
+
+                    SetCurrentValue(MarkdownProperty, newMdTxt);
 
                     return true;
                 }
@@ -443,6 +615,27 @@ namespace MdXaml
                 Debug.WriteLine($"Failed to open markdown from relative path '{source}': not found");
             }
         }
+
+        private ScrollViewer GetScrollViewer()
+        {
+            ScrollViewer Find(Visual visual)
+            {
+                for (int i = 0; i < VisualTreeHelper.GetChildrenCount(visual); i++)
+                {
+                    var child = VisualTreeHelper.GetChild(visual, i);
+
+                    if (child is ScrollViewer scroll)
+                        return scroll;
+
+                    if (child is Visual vis)
+                        return Find(vis);
+                }
+
+                return null;
+            }
+
+            return Find(this);
+        }
     }
 
     public enum ClickAction
@@ -453,6 +646,7 @@ namespace MdXaml
         DisplayAll,
         SafetyOpenBrowser,
         SafetyDisplayWithRelativePath,
+        HighlightOnly,
     }
 
     public enum SyntaxVersion

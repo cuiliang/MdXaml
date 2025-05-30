@@ -7,13 +7,13 @@ using MdXaml;
 namespace MdXaml.LinkActions
 {
     // set `public` access level for #29.
-    public class DiaplayCommand : ICommand
+    public class DisplayCommand : ICommand
     {
         private MarkdownScrollViewer Owner;
         private bool OpenBrowserWithAbsolutePath;
         private ICommand OpenCommand;
 
-        public DiaplayCommand(MarkdownScrollViewer owner, bool openBrowserWithAbsolutePath, bool safety)
+        public DisplayCommand(MarkdownScrollViewer owner, bool openBrowserWithAbsolutePath, bool safety)
         {
             Owner = owner;
             OpenBrowserWithAbsolutePath = openBrowserWithAbsolutePath;
@@ -42,6 +42,11 @@ namespace MdXaml.LinkActions
         {
             var path = parameter?.ToString();
             if (path is null) throw new ArgumentNullException(nameof(parameter));
+
+            if (path.StartsWith("file:///"))
+            {
+                path = path.Replace('\\', '/');
+            }
 
             var isAbs = Uri.IsWellFormedUriString(path, UriKind.Absolute);
 

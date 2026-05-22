@@ -8,9 +8,9 @@
     <PackageOutputPath>$(ArtifactsDir)nuget\$(Configuration)\</PackageOutputPath>
   </PropertyGroup>
   <PropertyGroup>
-    <PackageTargetFrameworks>net462;net8.0-windows</PackageTargetFrameworks>
-    <SampleTargetFrameworks>net462;net8.0-windows</SampleTargetFrameworks>
-    <TestTargetFrameworks>net462;net8.0-windows</TestTargetFrameworks>
+    <PackageTargetFrameworks>net462;net10.0-windows10.0.19041.0</PackageTargetFrameworks>
+    <SampleTargetFrameworks>net462;net10.0-windows10.0.19041.0</SampleTargetFrameworks>
+    <TestTargetFrameworks>net462;net10.0-windows10.0.19041.0</TestTargetFrameworks>
     <PackageVersion>2.0.0</PackageVersion>
   </PropertyGroup>
 </Project>
